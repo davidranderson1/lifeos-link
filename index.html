@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Reply</title>
+<style>
+  :root{color-scheme:light dark}
+  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;max-width:640px;margin:0 auto;padding:24px;line-height:1.5}
+  .card{border:1px solid color-mix(in srgb,CanvasText 15%,transparent);border-radius:12px;padding:20px 24px;margin-top:24px}
+  .lane{font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.6}
+  h1{font-size:20px;margin:.3em 0}
+  .ctx{opacity:.75;font-size:14px;white-space:pre-wrap}
+  textarea,input[type=text]{width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid color-mix(in srgb,CanvasText 25%,transparent);background:transparent;color:inherit;font:inherit;margin-top:6px}
+  textarea{min-height:120px}
+  label{font-size:13px;font-weight:600;display:block;margin-top:16px}
+  button{margin-top:18px;padding:10px 22px;border-radius:8px;border:none;background:#3ecf8e;color:#04150c;font-weight:700;font-size:15px;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}
+  .ok{padding:14px;border-radius:8px;background:color-mix(in srgb,#3ecf8e 18%,transparent);margin-top:20px}
+  .err{padding:14px;border-radius:8px;background:color-mix(in srgb,#e5484d 15%,transparent);margin-top:20px}
+  footer{margin-top:32px;font-size:12px;opacity:.5}
+</style>
+</head>
+<body>
+<div class="card" id="card"><p>Loading&hellip;</p></div>
+<footer>LifeOS &mdash; secure single-task link. Replies go only to David.</footer>
+<script>
+(function () {
+  var API = "https://yqmuujbfpkrkpukdbikk.supabase.co/functions/v1/lifeos-share";
+  var card = document.getElementById("card");
+  var token = new URLSearchParams(location.search).get("t") || "";
+
+  function el(tag, attrs, text) {
+    var n = document.createElement(tag);
+    for (var k in (attrs || {})) n.setAttribute(k, attrs[k]);
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+  function show() { card.replaceChildren.apply(card, arguments); }
+  function fail(msg) { show(el("h1", null, "Link not found"), el("p", null, msg || "This link is invalid or was removed.")); }
+
+  if (!/^[0-9a-f]{48}$/.test(token)) { fail(); return; }
+
+  fetch(API + "?t=" + token, { headers: { accept: "application/json" } })
+    .then(function (r) { return r.json(); })
+    .then(function (s) {
+      if (!s || !s.found) { fail(); return; }
+      document.title = s.task_title;
+      if (s.status === "closed" || s.status === "expired") {
+        show(el("h1", null, s.task_title), el("p", null, "This request is " + s.status + " and no longer accepts replies. Thank you."));
+        return;
+      }
+      var nodes = [
+        el("div", { "class": "lane" }, s.lane + " · LifeOS"),
+        el("h1", null, s.task_title),
+        el("p", { style: "white-space:pre-wrap" }, s.question)
+      ];
+      if (s.context_note) nodes.push(el("p", { "class": "ctx" }, s.context_note));
+      if (s.status === "replied" && !s.allow_multiple_replies) {
+        nodes.push(el("p", { "class": "ok" }, "A reply was already received. Thank you."));
+        show.apply(null, nodes); return;
+      }
+      var lab1 = el("label", null, "Your answer");
+      var ta = el("textarea", { maxlength: "8000", placeholder: "Type your reply here" });
+      var lab2 = el("label", null, "Your name (optional)");
+      var name = el("input", { type: "text", maxlength: "120" });
+      var btn = el("button", { type: "button" }, "Send reply");
+      btn.addEventListener("click", function () {
+        var reply = ta.value.trim();
+        if (!reply) { ta.focus(); return; }
+        btn.disabled = true; btn.textContent = "Sending…";
+        fetch(API, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ t: token, reply: reply, author: name.value.trim() })
+        }).then(function (r) { return r.json(); }).then(function (res) {
+          if (res && res.ok) {
+            show(el("h1", null, s.task_title),
+                 el("p", { "class": "ok" }, "Reply received — thank you" + (name.value.trim() ? ", " + name.value.trim() : "") + ". David's assistant will pick it up on the next run and the task moves forward."));
+          } else {
+            btn.disabled = false; btn.textContent = "Send reply";
+            card.appendChild(el("p", { "class": "err" }, (res && res.reason) === "no longer accepting replies" ? "This request no longer accepts replies." : "Something went wrong — please try again."));
+          }
+        }).catch(function () {
+          btn.disabled = false; btn.textContent = "Send reply";
+          card.appendChild(el("p", { "class": "err" }, "Network problem — please try again."));
+        });
+      });
+      nodes.push(lab1, ta, lab2, name, btn);
+      show.apply(null, nodes);
+    })
+    .catch(function () { fail("Could not load this request — please try again."); });
+})();
+</script>
+</body>
+</html>
