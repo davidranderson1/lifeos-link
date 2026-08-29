@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>LifeOS Live Tracker</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Public+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#F6F5F1; --surface:#FFFFFF; --ink:#20272A; --muted:#68736E; --line:#E2E0D8;
+  --accent:#0E7368; --accent-ink:#0A5A51;
+  --open:#0E7368; --waiting:#8A6410; --scheduled:#3D5AA8; --parked:#77807B; --done:#4C7A5E;
+  --chip-open:#DCEEEA; --chip-waiting:#F4E9CE; --chip-scheduled:#DFE6F6; --chip-parked:#E7E9E7; --chip-done:#DFEBE2;
+  --health:#2F7D5B; --wealth:#8A6410; --happiness:#A04E67; --operations:#46609F;
+  --ritual:#B4560F; --chip-ritual:#F7E3D2;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --ground:#14181A; --surface:#1C2225; --ink:#E7ECE9; --muted:#95A19B; --line:#2C3438;
+    --accent:#3AB3A4; --accent-ink:#5FC9BB;
+    --open:#3AB3A4; --waiting:#D3A93E; --scheduled:#8CA4E8; --parked:#88938D; --done:#7FB394;
+    --chip-open:#173733; --chip-waiting:#3A2F14; --chip-scheduled:#20294A; --chip-parked:#262C29; --chip-done:#1D3226;
+    --health:#5CB58D; --wealth:#D3A93E; --happiness:#D3809A; --operations:#8CA4E8;
+    --ritual:#E8935A; --chip-ritual:#3C2717;
+  }
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:"Public Sans",system-ui,sans-serif;font-size:15px;line-height:1.5;margin:0;padding:28px 20px 64px}
+.wrap{max-width:880px;margin:0 auto}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px}
+header h1{font-family:"Fraunces",Georgia,serif;font-weight:700;font-size:30px;margin:0}
+header .decklink{font-size:13px;color:var(--accent-ink);text-decoration:underline;text-underline-offset:2px;margin-left:auto}
+.stamp{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);margin-top:4px}
+.gate{max-width:420px;margin:80px auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:24px}
+.gate h2{font-family:"Fraunces",Georgia,serif;margin:0 0 8px}
+.gate p{font-size:13px;color:var(--muted)}
+.gate input{width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:transparent;color:inherit;font-family:"IBM Plex Mono",monospace;font-size:13px}
+button.go,button.f,button.tick,button.add{font:inherit;cursor:pointer}
+button.go{margin-top:14px;padding:10px 22px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:700}
+.err{padding:12px;border-radius:8px;background:color-mix(in srgb,#e5484d 15%,transparent);margin-top:14px;font-size:13px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 6px}
+.grp{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+button.f{font-size:13px;font-weight:600;padding:4px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+button.f[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+button.f:focus-visible,button.tick:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h2.sec{font-family:"Fraunces",Georgia,serif;font-size:19px;font-weight:600;margin:28px 0 2px;display:flex;align-items:baseline;gap:10px}
+h2.sec .n{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);font-weight:400}
+h2.rituals{color:var(--ritual)}
+h2[data-lane="Health"]{color:var(--health)} h2[data-lane="Wealth"]{color:var(--wealth)}
+h2[data-lane="Happiness"]{color:var(--happiness)} h2[data-lane="Operations"]{color:var(--operations)}
+.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-top:10px}
+.rcard{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.rcard.due{border-color:var(--ritual)}
+.rcard .rt{font-weight:600}
+.rcard .rmeta{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--muted)}
+.rcard .rrow{display:flex;align-items:center;gap:8px;margin-top:auto}
+button.tick{width:34px;height:34px;border-radius:999px;border:2px solid var(--line);background:transparent;color:var(--done);font-size:17px;line-height:1;display:inline-flex;align-items:center;justify-content:center;flex:none}
+button.tick:hover{border-color:var(--accent)}
+button.tick.on{background:var(--chip-done);border-color:var(--done)}
+.streak{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ritual)}
+ul.items{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+li.item{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;grid-template-columns:auto 1fr;gap:6px 12px}
+li.item.done .t{opacity:.55;text-decoration:line-through}
+.t{font-weight:600}
+.t a{color:var(--accent-ink);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}
+.meta{grid-column:2;font-size:13px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:600}
+.meta .due{font-family:"IBM Plex Mono",monospace;font-size:12px}
+.meta select{font:inherit;font-size:12px;background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 4px;margin-left:8px}
+.dom{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 6px;margin-left:8px;vertical-align:1px}
+.addbar{margin-top:34px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
+.addbar h3{font-family:"Fraunces",Georgia,serif;margin:0 0 8px;font-size:16px}
+.addbar .row{display:flex;flex-wrap:wrap;gap:8px}
+.addbar input,.addbar select{font:inherit;font-size:14px;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:transparent;color:inherit}
+.addbar input.title{flex:1 1 260px}
+.addbar input.small{flex:0 1 160px}
+button.add{padding:8px 18px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:700}
+footer{margin-top:44px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px}
+footer a{color:var(--accent-ink)}
+footer .signout{cursor:pointer;text-decoration:underline}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion: no-preference){ li.item,.rcard{transition:border-color .15s} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="gate" id="gate" hidden>
+  <h2>LifeOS Live Tracker</h2>
+  <p>Enter the access key. It is remembered on this device only.</p>
+  <input id="keyin" type="password" autocomplete="off" placeholder="access key">
+  <button class="go" id="keygo">Open the tracker</button>
+  <div class="err" id="gateerr" hidden>That key was not accepted — check it and try again.</div>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <h1>LifeOS Live Tracker</h1>
+    <a class="decklink" href="https://claude.ai/code/artifact/a6393748-41a1-4f09-9b56-034fb2fa3fca">Daily deck &rarr;</a>
+  </header>
+  <div class="stamp" id="stamp">Loading&hellip;</div>
+
+  <h2 class="sec rituals">Rituals <span class="n" id="rcount"></span></h2>
+  <div class="rgrid" id="rituals"></div>
+
+  <div class="controls">
+    <div class="grp"><span class="lbl">Domain</span>
+      <button class="f" data-dim="domain" data-val="all" aria-pressed="true">All</button>
+      <button class="f" data-dim="domain" data-val="personal" aria-pressed="false">Personal</button>
+      <button class="f" data-dim="domain" data-val="ventures" aria-pressed="false">Ventures</button>
+    </div>
+    <div class="grp"><span class="lbl">State</span>
+      <button class="f" data-dim="state" data-val="all" aria-pressed="true">All</button>
+      <button class="f" data-dim="state" data-val="open" aria-pressed="false">Open</button>
+      <button class="f" data-dim="state" data-val="waiting" aria-pressed="false">Waiting</button>
+      <button class="f" data-dim="state" data-val="scheduled" aria-pressed="false">Scheduled</button>
+      <button class="f" data-dim="state" data-val="parked" aria-pressed="false">Parked</button>
+      <button class="f" data-dim="state" data-val="done" aria-pressed="false">Done</button>
+    </div>
+  </div>
+  <main id="lanes"></main>
+
+  <div class="addbar">
+    <h3>Add an item</h3>
+    <div class="row">
+      <input class="title" id="a_title" placeholder="What needs doing, in your words">
+      <select id="a_lane"><option>Operations</option><option>Wealth</option><option>Health</option><option>Happiness</option></select>
+      <select id="a_domain"><option value="personal">personal</option><option value="ventures">ventures</option><option value="fluidseal">fluidseal</option></select>
+      <input class="small" id="a_due" placeholder="due (optional)">
+      <button class="add" id="a_go">Add</button>
+    </div>
+  </div>
+
+  <footer>Live view of the LifeOS ledger (lifeos Supabase). The <a href="https://claude.ai/code/artifact/a6393748-41a1-4f09-9b56-034fb2fa3fca">Command Deck</a> is the nightly snapshot; the evening funnel reconciles both. <span class="signout" id="signout">Forget key on this device</span></footer>
+</div>
+</div>
+
+<script>
+(function(){
+  var API="https://hyccceaycootqtnrioyf.supabase.co/functions/v1/lifeos-deck";
+  var LANES=["Operations","Wealth","Health","Happiness"];
+  var PR={open:0,waiting:1,scheduled:2,parked:3,done:4};
+  var filt={domain:"all",state:"all"};
+  var KEY=null, ITEMS=[];
+  try{ KEY=localStorage.getItem("lifeos-deck-key"); }catch(e){}
+
+  function el(t,a,x){var n=document.createElement(t);for(var k in (a||{}))n.setAttribute(k,a[k]);if(x!==undefined)n.textContent=x;return n;}
+  function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+  function md(s){var o="",rx=/\[([^\]]+)\]\((https?:[^)]+)\)/g,l=0,m;while((m=rx.exec(s))){o+=esc(s.slice(l,m.index))+'<a href="'+esc(m[2])+'" target="_blank" rel="noopener">'+esc(m[1])+"</a>";l=m.index+m[0].length;}return o+esc(s.slice(l));}
+  function api(body){ body.k=KEY; return fetch(API,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}).then(function(r){return r.json();}); }
+  function cadence(u,n){ if(u==="day")return n===1?"daily":"every "+n+" days"; if(u==="week")return n===1?"weekly":n===2?"every 2 weeks":"every "+n+" weeks"; return n===1?"monthly":n===3?"quarterly":"every "+n+" months"; }
+
+  function showGate(bad){ document.getElementById("app").hidden=true; document.getElementById("gate").hidden=false; document.getElementById("gateerr").hidden=!bad; }
+  function load(){
+    api({action:"state"}).then(function(res){
+      if(!res||!res.ok){ try{localStorage.removeItem("lifeos-deck-key");}catch(e){} KEY=null; showGate(true); return; }
+      ITEMS=res.items||[];
+      document.getElementById("gate").hidden=true; document.getElementById("app").hidden=false;
+      document.getElementById("stamp").textContent="Live ledger · "+ITEMS.length+" items · refreshed "+new Date().toLocaleTimeString();
+      render();
+    }).catch(function(){ document.getElementById("stamp").textContent="Network problem — pull to refresh or try again."; });
+  }
+
+  function render(){
+    var rits=ITEMS.filter(function(r){return r.repeat_unit;});
+    var rg=document.getElementById("rituals"); rg.replaceChildren();
+    document.getElementById("rcount").textContent=rits.length;
+    rits.forEach(function(r){
+      var c=el("div",{"class":"rcard"+(r.due_now?" due":"")});
+      c.appendChild(el("div",{"class":"rt"},r.title));
+      c.appendChild(el("div",{"class":"rmeta"},cadence(r.repeat_unit,r.repeat_n||1)+" · "+(r.owner||"")));
+      var row=el("div",{"class":"rrow"});
+      var done=r.state==="done";
+      var tick=el("button",{"class":"tick"+(done?" on":""),title:done?"Done this period — tap to reopen":"Mark done"},done?"✓":"");
+      tick.addEventListener("click",function(){ api({action:done?"reopen":"complete",id:r.id}).then(load); });
+      row.appendChild(tick);
+      row.appendChild(el("span",{"class":"streak"},"🔥 "+(r.streak||0)+(r.best?" · best "+r.best:"")));
+      c.appendChild(row);
+      rg.appendChild(c);
+    });
+
+    var rows=ITEMS.filter(function(r){return !r.repeat_unit;}).filter(function(r){
+      return (filt.domain==="all"||r.domain===filt.domain)&&(filt.state==="all"||r.state===filt.state);});
+    rows.sort(function(a,b){ return (PR[a.state]-PR[b.state])||((a.due_date||"9999")<(b.due_date||"9999")?-1:1); });
+    var main=document.getElementById("lanes"); main.replaceChildren();
+    LANES.forEach(function(lane){
+      var lr=rows.filter(function(r){return r.lane===lane;});
+      var h=el("h2",{"class":"sec","data-lane":lane}); h.innerHTML=esc(lane)+' <span class="n">'+lr.length+"</span>"; main.appendChild(h);
+      if(!lr.length){ main.appendChild(el("p",{"class":"meta"},"Nothing here under the current filters.")); return; }
+      var ul=el("ul",{"class":"items"});
+      lr.forEach(function(r){
+        var li=el("li",{"class":"item "+r.state});
+        var done=r.state==="done";
+        var tick=el("button",{"class":"tick"+(done?" on":""),title:done?"Done — tap to reopen":"Mark done"},done?"✓":"");
+        tick.addEventListener("click",function(){ api({action:done?"reopen":"complete",id:r.id}).then(load); });
+        var t=el("div",{"class":"t"}); t.innerHTML=md(r.title)+'<span class="dom">'+esc(r.domain)+"</span>";
+        var bits=["<b>"+esc(r.owner||"")+"</b>"];
+        if(r.due_text)bits.push('<span class="due">due '+esc(r.due_text)+"</span>");
+        if(r.next_step)bits.push("next: "+md(r.next_step));
+        var meta=el("div",{"class":"meta"}); meta.innerHTML=bits.join(" · ");
+        var sel=el("select",{title:"State"});
+        ["open","waiting","scheduled","parked","done"].forEach(function(s){var o=el("option",{value:s},s);if(s===r.state)o.selected=true;sel.appendChild(o);});
+        sel.addEventListener("change",function(){ api({action:"set_state",id:r.id,state:sel.value}).then(load); });
+        meta.appendChild(sel);
+        li.appendChild(tick); li.appendChild(t); li.appendChild(meta);
+        ul.appendChild(li);
+      });
+      main.appendChild(ul);
+    });
+  }
+
+  document.querySelectorAll("button.f").forEach(function(b){
+    b.addEventListener("click",function(){
+      var dim=b.getAttribute("data-dim"); filt[dim]=b.getAttribute("data-val");
+      document.querySelectorAll('button.f[data-dim="'+dim+'"]').forEach(function(x){x.setAttribute("aria-pressed",x===b?"true":"false");});
+      render();
+    });
+  });
+  document.getElementById("a_go").addEventListener("click",function(){
+    var t=document.getElementById("a_title").value.trim(); if(!t){document.getElementById("a_title").focus();return;}
+    api({action:"add_item",title:t,lane:document.getElementById("a_lane").value,domain:document.getElementById("a_domain").value,due_text:document.getElementById("a_due").value.trim()})
+      .then(function(){document.getElementById("a_title").value="";document.getElementById("a_due").value="";load();});
+  });
+  document.getElementById("keygo").addEventListener("click",function(){
+    var v=document.getElementById("keyin").value.trim(); if(!v)return;
+    KEY=v; try{localStorage.setItem("lifeos-deck-key",v);}catch(e){}
+    load();
+  });
+  document.getElementById("keyin").addEventListener("keydown",function(e){ if(e.key==="Enter")document.getElementById("keygo").click(); });
+  document.getElementById("signout").addEventListener("click",function(){ try{localStorage.removeItem("lifeos-deck-key");}catch(e){} KEY=null; showGate(false); });
+
+  if(KEY){ load(); } else { showGate(false); }
+})();
+</script>
+</body>
+</html>
