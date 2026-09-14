@@ -14,6 +14,7 @@
   --chip-open:#DCEEEA; --chip-waiting:#F4E9CE; --chip-scheduled:#DFE6F6; --chip-parked:#E7E9E7; --chip-done:#DFEBE2;
   --health:#2F7D5B; --wealth:#8A6410; --happiness:#A04E67; --operations:#46609F;
   --ritual:#B4560F; --chip-ritual:#F7E3D2;
+  --now:#B3261E; --now-bg:#FBE9E7;
 }
 @media (prefers-color-scheme: dark){
   :root{
@@ -23,6 +24,7 @@
     --chip-open:#173733; --chip-waiting:#3A2F14; --chip-scheduled:#20294A; --chip-parked:#262C29; --chip-done:#1D3226;
     --health:#5CB58D; --wealth:#D3A93E; --happiness:#D3809A; --operations:#8CA4E8;
     --ritual:#E8935A; --chip-ritual:#3C2717;
+    --now:#FF7B72; --now-bg:#3A1A17;
   }
 }
 *{box-sizing:border-box}
@@ -81,6 +83,17 @@ footer{margin-top:44px;font-size:12px;color:var(--muted);border-top:1px solid va
 footer a{color:var(--accent-ink)}
 footer .signout{cursor:pointer;text-decoration:underline}
 [hidden]{display:none!important}
+.band{margin:18px 0 6px;background:var(--now-bg);border:2px solid var(--now);border-radius:12px;padding:14px 16px}
+.band h2{font-family:"Fraunces",Georgia,serif;font-size:20px;margin:0 0 4px;color:var(--now);display:flex;align-items:baseline;gap:10px}
+.band h2 .n{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);font-weight:400}
+.band p.sub{margin:0 0 10px;font-size:12.5px;color:var(--muted)}
+.band ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.band li{background:var(--surface);border:1px solid var(--now);border-radius:10px;padding:12px 14px;display:grid;grid-template-columns:auto 1fr auto;gap:6px 12px;align-items:start}
+.band .t{font-weight:700;font-size:16px}
+.band .meta{grid-column:2;font-size:13px;color:var(--muted)}
+.band .since{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--now)}
+button.clr{font:inherit;font-size:12px;cursor:pointer;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);white-space:nowrap}
+button.clr:hover{border-color:var(--now);color:var(--now)}
 @media (prefers-reduced-motion: no-preference){ li.item,.rcard{transition:border-color .15s} }
 </style>
 </head>
@@ -101,6 +114,12 @@ footer .signout{cursor:pointer;text-decoration:underline}
     <a class="decklink" href="https://claude.ai/code/artifact/a6393748-41a1-4f09-9b56-034fb2fa3fca">Daily deck &rarr;</a>
   </header>
   <div class="stamp" id="stamp">Loading&hellip;</div>
+
+  <div class="band" id="band" hidden>
+    <h2>Needs David now <span class="n" id="bcount"></span></h2>
+    <p class="sub">Claude is blocked on these until you act — a code, a sign-in, an approval. Tick when done or clear the flag to demote.</p>
+    <ul id="bandlist"></ul>
+  </div>
 
   <h2 class="sec rituals">Rituals <span class="n" id="rcount"></span></h2>
   <div class="rgrid" id="rituals"></div>
@@ -163,7 +182,32 @@ footer .signout{cursor:pointer;text-decoration:underline}
     }).catch(function(){ document.getElementById("stamp").textContent="Network problem — pull to refresh or try again."; });
   }
 
+  function ago(iso){ if(!iso)return ""; var m=Math.round((Date.now()-new Date(iso).getTime())/60000); if(m<1)return "just now"; if(m<60)return m+" min ago"; var h=Math.round(m/60); if(h<24)return h+" h ago"; return Math.round(h/24)+" d ago"; }
+  function renderBand(){
+    var rows=ITEMS.filter(function(r){return r.priority==="now"&&r.state!=="done";});
+    rows.sort(function(a,b){return (a.priority_set_at||"")<(b.priority_set_at||"")?-1:1;});
+    var band=document.getElementById("band"), ul=document.getElementById("bandlist"); ul.replaceChildren();
+    band.hidden=!rows.length; document.getElementById("bcount").textContent=rows.length;
+    document.title=(rows.length?"("+rows.length+") ":"")+"LifeOS Live Tracker";
+    rows.forEach(function(r){
+      var li=el("li");
+      var tick=el("button",{"class":"tick",title:"Done"},"");
+      tick.addEventListener("click",function(){ api({action:"complete",id:r.id}).then(load); });
+      var t=el("div",{"class":"t"}); t.innerHTML=md(r.title)+'<span class="dom">'+esc(r.domain)+"</span>";
+      var clr=el("button",{"class":"clr",title:"Remove from this band, keep the item"},"Clear flag");
+      clr.addEventListener("click",function(){ api({action:"set_priority",id:r.id,priority:null}).then(load); });
+      var bits=[];
+      if(r.next_step)bits.push(md(r.next_step));
+      bits.push('<span class="since">raised '+esc(ago(r.priority_set_at))+"</span>");
+      if(r.reference_url)bits.push('<a href="'+esc(r.reference_url)+'" target="_blank" rel="noopener">'+esc(r.reference_label||"open")+"</a>");
+      var meta=el("div",{"class":"meta"}); meta.innerHTML=bits.join(" · ");
+      li.appendChild(tick); li.appendChild(t); li.appendChild(clr); li.appendChild(meta);
+      ul.appendChild(li);
+    });
+  }
+
   function render(){
+    renderBand();
     var rits=ITEMS.filter(function(r){return r.repeat_unit;});
     var rg=document.getElementById("rituals"); rg.replaceChildren();
     document.getElementById("rcount").textContent=rits.length;
@@ -232,6 +276,8 @@ footer .signout{cursor:pointer;text-decoration:underline}
   document.getElementById("signout").addEventListener("click",function(){ try{localStorage.removeItem("lifeos-deck-key");}catch(e){} KEY=null; showGate(false); });
 
   if(KEY){ load(); } else { showGate(false); }
+  setInterval(function(){ if(KEY&&!document.hidden) load(); }, 60000);
+  document.addEventListener("visibilitychange",function(){ if(KEY&&!document.hidden) load(); });
 })();
 </script>
 </body>
