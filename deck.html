@@ -32,7 +32,9 @@ body{background:var(--ground);color:var(--ink);font-family:"Public Sans",system-
 .wrap{max-width:880px;margin:0 auto}
 header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px}
 header h1{font-family:"Fraunces",Georgia,serif;font-weight:700;font-size:30px;margin:0}
-header .decklink{font-size:13px;color:var(--accent-ink);text-decoration:underline;text-underline-offset:2px;margin-left:auto}
+header .links{margin-left:auto;display:flex;flex-wrap:wrap;gap:6px}
+header .links a{font-size:12.5px;font-weight:600;color:var(--accent-ink);text-decoration:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 11px}
+header .links a:hover{border-color:var(--accent)}
 .stamp{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);margin-top:4px}
 .gate{max-width:420px;margin:80px auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:24px}
 .gate h2{font-family:"Fraunces",Georgia,serif;margin:0 0 8px}
@@ -111,7 +113,11 @@ button.clr:hover{border-color:var(--now);color:var(--now)}
 <div id="app" hidden>
   <header>
     <h1>LifeOS Live Tracker</h1>
-    <a class="decklink" href="https://claude.ai/code/artifact/a6393748-41a1-4f09-9b56-034fb2fa3fca">Daily deck &rarr;</a>
+    <nav class="links" aria-label="LifeOS surfaces">
+      <a href="https://app.bbetter.io">bbetter app</a>
+      <a href="https://claude.ai/code/artifact/a6393748-41a1-4f09-9b56-034fb2fa3fca">Command Deck</a>
+      <a href="https://claude.ai/code/artifact/d062f161-7239-47f7-9504-288e8bb4d457">Open Items board</a>
+    </nav>
   </header>
   <div class="stamp" id="stamp">Loading&hellip;</div>
 
@@ -152,7 +158,7 @@ button.clr:hover{border-color:var(--now);color:var(--now)}
     </div>
   </div>
 
-  <footer>Live view of the LifeOS ledger (lifeos Supabase). The <a href="https://claude.ai/code/artifact/a6393748-41a1-4f09-9b56-034fb2fa3fca">Command Deck</a> is the nightly snapshot; the evening funnel reconciles both. <span class="signout" id="signout">Forget key on this device</span></footer>
+  <footer>Live view of the LifeOS ledger — the same rows the <a href="https://app.bbetter.io">bbetter app</a> shows under Me. The <a href="https://claude.ai/code/artifact/a6393748-41a1-4f09-9b56-034fb2fa3fca">Command Deck</a> is the nightly snapshot (Claude sign-in), the <a href="https://claude.ai/code/artifact/d062f161-7239-47f7-9504-288e8bb4d457">Open Items board</a> carries the questions; the evening funnel reconciles all of them. <span class="signout" id="signout">Forget key on this device</span></footer>
 </div>
 </div>
 
