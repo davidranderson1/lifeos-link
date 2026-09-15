@@ -136,6 +136,13 @@ button.clr:hover{border-color:var(--now);color:var(--now)}
       <button class="f" data-dim="domain" data-val="personal" aria-pressed="false">Personal</button>
       <button class="f" data-dim="domain" data-val="ventures" aria-pressed="false">Ventures</button>
     </div>
+    <div class="grp"><span class="lbl">Lane</span>
+      <button class="f" data-dim="lane" data-val="all" aria-pressed="true">All</button>
+      <button class="f" data-dim="lane" data-val="Health" aria-pressed="false">Health</button>
+      <button class="f" data-dim="lane" data-val="Wealth" aria-pressed="false">Wealth</button>
+      <button class="f" data-dim="lane" data-val="Happiness" aria-pressed="false">Happiness</button>
+      <button class="f" data-dim="lane" data-val="Operations" aria-pressed="false">Operations</button>
+    </div>
     <div class="grp"><span class="lbl">State</span>
       <button class="f" data-dim="state" data-val="all" aria-pressed="true">All</button>
       <button class="f" data-dim="state" data-val="open" aria-pressed="false">Open</button>
@@ -167,7 +174,7 @@ button.clr:hover{border-color:var(--now);color:var(--now)}
   var API="https://hyccceaycootqtnrioyf.supabase.co/functions/v1/lifeos-deck";
   var LANES=["Operations","Wealth","Health","Happiness"];
   var PR={open:0,waiting:1,scheduled:2,parked:3,done:4};
-  var filt={domain:"all",state:"all"};
+  var filt={domain:"all",lane:"all",state:"all"};
   var KEY=null, ITEMS=[];
   try{ KEY=localStorage.getItem("lifeos-deck-key"); }catch(e){}
 
@@ -232,12 +239,14 @@ button.clr:hover{border-color:var(--now);color:var(--now)}
     });
 
     var rows=ITEMS.filter(function(r){return !r.repeat_unit;}).filter(function(r){
-      return (filt.domain==="all"||r.domain===filt.domain)&&(filt.state==="all"||r.state===filt.state);});
+      return (filt.domain==="all"||r.domain===filt.domain)&&(filt.lane==="all"||r.lane===filt.lane)&&(filt.state==="all"||r.state===filt.state);});
     rows.sort(function(a,b){ return (PR[a.state]-PR[b.state])||((a.due_date||"9999")<(b.due_date||"9999")?-1:1); });
     var main=document.getElementById("lanes"); main.replaceChildren();
     LANES.forEach(function(lane){
+      if(filt.lane!=="all"&&lane!==filt.lane) return;
       var lr=rows.filter(function(r){return r.lane===lane;});
-      var h=el("h2",{"class":"sec","data-lane":lane}); h.innerHTML=esc(lane)+' <span class="n">'+lr.length+"</span>"; main.appendChild(h);
+      var h=el("h2",{"class":"sec","data-lane":lane}); h.innerHTML=esc(lane)+' <span class="n">'+lr.length+"</span>"; h.style.cursor="pointer"; h.title=filt.lane==="all"?"Show only "+lane:"Show all lanes";
+      h.addEventListener("click",function(){ setFilt("lane", filt.lane==="all"?lane:"all"); }); main.appendChild(h);
       if(!lr.length){ main.appendChild(el("p",{"class":"meta"},"Nothing here under the current filters.")); return; }
       var ul=el("ul",{"class":"items"});
       lr.forEach(function(r){
@@ -261,12 +270,13 @@ button.clr:hover{border-color:var(--now);color:var(--now)}
     });
   }
 
+  function setFilt(dim,val){
+    filt[dim]=val;
+    document.querySelectorAll('button.f[data-dim="'+dim+'"]').forEach(function(x){x.setAttribute("aria-pressed",x.getAttribute("data-val")===val?"true":"false");});
+    render();
+  }
   document.querySelectorAll("button.f").forEach(function(b){
-    b.addEventListener("click",function(){
-      var dim=b.getAttribute("data-dim"); filt[dim]=b.getAttribute("data-val");
-      document.querySelectorAll('button.f[data-dim="'+dim+'"]').forEach(function(x){x.setAttribute("aria-pressed",x===b?"true":"false");});
-      render();
-    });
+    b.addEventListener("click",function(){ setFilt(b.getAttribute("data-dim"), b.getAttribute("data-val")); });
   });
   document.getElementById("a_go").addEventListener("click",function(){
     var t=document.getElementById("a_title").value.trim(); if(!t){document.getElementById("a_title").focus();return;}
