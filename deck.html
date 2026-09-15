@@ -103,6 +103,22 @@ footer .signout{cursor:pointer;text-decoration:underline}
 .band .since{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--now)}
 button.clr{font:inherit;font-size:12px;cursor:pointer;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);white-space:nowrap}
 button.clr:hover{border-color:var(--now);color:var(--now)}
+.money{margin:18px 0 6px;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--wealth);border-radius:12px;padding:14px 16px}
+.money h2{font-family:"Fraunces",Georgia,serif;font-size:20px;margin:0 0 10px;color:var(--wealth);display:flex;flex-wrap:wrap;align-items:baseline;gap:10px}
+.money h2 .n{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);font-weight:400}
+.money h2 a{margin-left:auto;font-family:"Public Sans",system-ui,sans-serif;font-size:12.5px;font-weight:600;color:var(--accent-ink);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:3px 11px}
+.money h2 a:hover{border-color:var(--accent)}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.mt{background:var(--ground);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+.mt .ml{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.mt .mv{font-family:"Fraunces",Georgia,serif;font-size:22px;font-weight:600;line-height:1.2;margin:2px 0}
+.mt .ms{font-size:12px;color:var(--muted)}
+.msum{font-size:13.5px;margin:12px 0 6px}
+.madv{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.madv li{padding-left:16px;position:relative}
+.madv li::before{content:"\2192";position:absolute;left:0;color:var(--wealth)}
+.madv li.urgent::before{color:var(--now)}
+.mnote{font-size:12px;color:var(--muted);margin:8px 0 0}
 @media (prefers-reduced-motion: no-preference){ li.item,.rcard{transition:border-color .15s} }
 </style>
 </head>
@@ -138,6 +154,20 @@ button.clr:hover{border-color:var(--now);color:var(--now)}
     <h2>Needs David now <span class="n" id="bcount"></span></h2>
     <p class="sub">Claude is blocked on these until you act — a code, a sign-in, an approval. Tick when done or clear the flag to demote.</p>
     <ul id="bandlist"></ul>
+  </div>
+
+  <div class="money" id="money" hidden>
+    <h2>Money <span class="n" id="mstamp"></span><a href="https://app.bbetter.io/advisor" id="madvlink">Open the Advisor</a></h2>
+    <div class="mgrid">
+      <div class="mt"><div class="ml">Net worth</div><div class="mv" id="m_nw"></div><div class="ms" id="m_nw2"></div></div>
+      <div class="mt"><div class="ml">Cash</div><div class="mv" id="m_cash"></div><div class="ms" id="m_cash2"></div></div>
+      <div class="mt"><div class="ml">Cards owing</div><div class="mv" id="m_cards"></div><div class="ms" id="m_cards2"></div></div>
+      <div class="mt"><div class="ml">Spent &middot; 30 days</div><div class="mv" id="m_spend"></div><div class="ms" id="m_spend2"></div></div>
+      <div class="mt"><div class="ml">Open advice</div><div class="mv" id="m_adv"></div><div class="ms" id="m_adv2"></div></div>
+    </div>
+    <p class="msum" id="m_sum" hidden></p>
+    <ul class="madv" id="m_list"></ul>
+    <p class="mnote" id="m_note" hidden></p>
   </div>
 
   <h2 class="sec rituals">Rituals <span class="n" id="rcount"></span></h2>
@@ -192,7 +222,7 @@ button.clr:hover{border-color:var(--now);color:var(--now)}
   var LANES=["Operations","Wealth","Health","Happiness"];
   var PR={open:0,waiting:1,scheduled:2,parked:3,done:4};
   var filt={domain:"all",lane:"all",state:"all"};
-  var KEY=null, SESS=null, WHO=null, ITEMS=[];
+  var KEY=null, SESS=null, WHO=null, ITEMS=[], MONEY=null;
   try{ KEY=localStorage.getItem("lifeos-deck-key"); }catch(e){}
   try{ SESS=JSON.parse(localStorage.getItem("lifeos-deck-session")||"null"); }catch(e){}
 
@@ -261,7 +291,7 @@ button.clr:hover{border-color:var(--now);color:var(--now)}
         saveSess(null); try{localStorage.removeItem("lifeos-deck-key");}catch(e){} KEY=null;
         showGate(why?("Sign-in not accepted: "+why+". Request a new email link."):"Sign in again to continue."); return;
       }
-      ITEMS=res.items||[]; WHO=res.who||null;
+      ITEMS=res.items||[]; WHO=res.who||null; MONEY=res.money||null;
       document.getElementById("gate").hidden=true; document.getElementById("app").hidden=false;
       var as=WHO&&WHO.via==="email"&&WHO.email?"signed in as "+WHO.email:"access key";
       document.getElementById("stamp").textContent="Live ledger · "+ITEMS.length+" items · refreshed "+new Date().toLocaleTimeString()+" · "+as;
@@ -293,8 +323,39 @@ button.clr:hover{border-color:var(--now);color:var(--now)}
     });
   }
 
+  // ---- money band: the latest Advisor read from bbetter (board item 35) ----
+  function dollars(n,dec){ if(n===null||n===undefined||isNaN(n))return "—"; var v=Number(n); var s="$"+Math.abs(v).toLocaleString("en-CA",{minimumFractionDigits:dec||0,maximumFractionDigits:dec||0}); return (v<0?"−":"")+s; }
+  function whenShort(iso){ if(!iso)return ""; var d=new Date(iso); return d.toLocaleDateString("en-CA",{month:"short",day:"numeric"})+" "+d.toLocaleTimeString("en-CA",{hour:"numeric",minute:"2-digit"}); }
+  function renderMoney(){
+    var box=document.getElementById("money"), m=MONEY;
+    if(!m){ box.hidden=true; return; }
+    box.hidden=false;
+    var bits=["Advisor read "+whenShort(m.as_of)];
+    if(m.status==="rules_only")bits.push("rules only");
+    if(m.accounts_without_balance)bits.push(m.accounts_without_balance+" account"+(m.accounts_without_balance===1?"":"s")+" without a balance");
+    document.getElementById("mstamp").textContent=bits.join(" · ");
+    document.getElementById("m_nw").textContent=dollars(m.net_worth);
+    document.getElementById("m_nw2").textContent=(m.net_worth_personal!==null?"personal "+dollars(m.net_worth_personal):"")+(m.net_worth_business?" · business "+dollars(m.net_worth_business):"");
+    document.getElementById("m_cash").textContent=dollars(m.cash);
+    document.getElementById("m_cash2").textContent=m.runway_months!==null?"≈ "+Math.round(m.runway_months)+" months of spending":"";
+    document.getElementById("m_cards").textContent=dollars(m.credit_owed);
+    document.getElementById("m_cards2").textContent=m.credit_cards_owing!==null?m.credit_cards_owing+" card"+(m.credit_cards_owing===1?"":"s"):"";
+    document.getElementById("m_spend").textContent=dollars(m.spend_30d);
+    var sp=[]; if(m.spend_change_pct!==null)sp.push((m.spend_change_pct>0?"+":"")+m.spend_change_pct+"% vs previous 30"); if(m.income_30d!==null)sp.push("income "+dollars(m.income_30d));
+    document.getElementById("m_spend2").textContent=sp.join(" · ");
+    document.getElementById("m_adv").textContent=m.open_advice;
+    document.getElementById("m_adv2").textContent=m.open_advice?"accept one to make it a ledger item":"nothing open";
+    var sum=document.getElementById("m_sum"); sum.hidden=!m.summary_line; sum.textContent=m.summary_line||"";
+    var ul=document.getElementById("m_list"); ul.replaceChildren();
+    (m.top_advice||[]).forEach(function(a){ ul.appendChild(el("li",{"class":a.severity||""},a.title)); });
+    var note=document.getElementById("m_note"); var nb=[];
+    if(m.days_since_last_transaction!==null&&m.days_since_last_transaction>14)nb.push("Last transaction "+m.days_since_last_transaction+" days ago — import a fresh Simplifi export.");
+    if(m.balances_oldest_days!==null&&m.balances_oldest_days>60)nb.push("Oldest balance "+m.balances_oldest_days+" days old (vehicle values carry Simplifi's own date).");
+    note.hidden=!nb.length; note.textContent=nb.join(" ");
+  }
+
   function render(){
-    renderBand();
+    renderBand(); renderMoney();
     var rits=ITEMS.filter(function(r){return r.repeat_unit;});
     var rg=document.getElementById("rituals"); rg.replaceChildren();
     document.getElementById("rcount").textContent=rits.length;
