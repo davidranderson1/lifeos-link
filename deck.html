@@ -39,10 +39,17 @@ header .links a:hover{border-color:var(--accent)}
 .gate{max-width:420px;margin:80px auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:24px}
 .gate h2{font-family:"Fraunces",Georgia,serif;margin:0 0 8px}
 .gate p{font-size:13px;color:var(--muted)}
+.gate p a{color:var(--accent-ink)}
 .gate input{width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:transparent;color:inherit;font-family:"IBM Plex Mono",monospace;font-size:13px}
+.gate input[type=email]{font-family:"Public Sans",system-ui,sans-serif;font-size:15px}
+.gate details{margin-top:18px;border-top:1px solid var(--line);padding-top:12px}
+.gate summary{cursor:pointer;font-size:13px;color:var(--muted)}
+.gate details input{margin-top:10px}
 button.go,button.f,button.tick,button.add{font:inherit;cursor:pointer}
 button.go{margin-top:14px;padding:10px 22px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:700}
+button.go[disabled]{opacity:.6;cursor:default}
 .err{padding:12px;border-radius:8px;background:color-mix(in srgb,#e5484d 15%,transparent);margin-top:14px;font-size:13px}
+.ok{padding:12px;border-radius:8px;background:var(--chip-done);color:var(--ink);margin-top:14px;font-size:13px}
 .controls{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 6px}
 .grp{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-right:2px}
@@ -104,10 +111,16 @@ button.clr:hover{border-color:var(--now);color:var(--now)}
 
 <div class="gate" id="gate" hidden>
   <h2>LifeOS Live Tracker</h2>
-  <p>Enter the access key. It is remembered on this device only.</p>
-  <input id="keyin" type="password" autocomplete="off" placeholder="access key">
-  <button class="go" id="keygo">Open the tracker</button>
-  <div class="err" id="gateerr" hidden>That key was not accepted — check it and try again.</div>
+  <p>Sign in with an email link — the same sign-in as the <a href="https://app.bbetter.io">bbetter app</a>. This device then stays signed in.</p>
+  <input id="emailin" type="email" autocomplete="email" inputmode="email" placeholder="email address">
+  <button class="go" id="emailgo">Email me a sign-in link</button>
+  <div class="ok" id="sent" hidden></div>
+  <div class="err" id="gateerr" hidden></div>
+  <details id="keyalt">
+    <summary>Use the access key instead</summary>
+    <input id="keyin" type="password" autocomplete="off" placeholder="access key">
+    <button class="go" id="keygo">Open the tracker</button>
+  </details>
 </div>
 
 <div id="app" hidden>
@@ -135,6 +148,7 @@ button.clr:hover{border-color:var(--now);color:var(--now)}
       <button class="f" data-dim="domain" data-val="all" aria-pressed="true">All</button>
       <button class="f" data-dim="domain" data-val="personal" aria-pressed="false">Personal</button>
       <button class="f" data-dim="domain" data-val="ventures" aria-pressed="false">Ventures</button>
+      <button class="f" data-dim="domain" data-val="fluidseal" aria-pressed="false">Fluidseal</button>
     </div>
     <div class="grp"><span class="lbl">Lane</span>
       <button class="f" data-dim="lane" data-val="all" aria-pressed="true">All</button>
@@ -165,32 +179,92 @@ button.clr:hover{border-color:var(--now);color:var(--now)}
     </div>
   </div>
 
-  <footer>Live view of the LifeOS ledger — the same rows the <a href="https://app.bbetter.io">bbetter app</a> shows under Me. The <a href="https://claude.ai/code/artifact/a6393748-41a1-4f09-9b56-034fb2fa3fca">Command Deck</a> is the nightly snapshot (Claude sign-in), the <a href="https://claude.ai/code/artifact/d062f161-7239-47f7-9504-288e8bb4d457">Open Items board</a> carries the questions; the evening funnel reconciles all of them. <span class="signout" id="signout">Forget key on this device</span></footer>
+  <footer>Live view of the LifeOS ledger — the same rows the <a href="https://app.bbetter.io">bbetter app</a> shows under Me. The <a href="https://claude.ai/code/artifact/a6393748-41a1-4f09-9b56-034fb2fa3fca">Command Deck</a> is the nightly snapshot (Claude sign-in), the <a href="https://claude.ai/code/artifact/d062f161-7239-47f7-9504-288e8bb4d457">Open Items board</a> carries the questions; the evening funnel reconciles all of them. <span class="signout" id="signout">Sign out on this device</span></footer>
 </div>
 </div>
 
 <script>
 (function(){
   var API="https://hyccceaycootqtnrioyf.supabase.co/functions/v1/lifeos-deck";
+  // Supabase Auth (email link) — the same project and sign-in the bbetter app uses. The anon key is public by design; the ledger is only reachable through the lifeos-deck function.
+  var SB_URL="https://hyccceaycootqtnrioyf.supabase.co";
+  var SB_ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5Y2NjZWF5Y29vdHF0bnJpb3lmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc5NDIyNjQsImV4cCI6MjEwMzUxODI2NH0.8oxM4Fq-9YUArarzae4RIlsrvL-XXfmZBLLMstl1aXM";
   var LANES=["Operations","Wealth","Health","Happiness"];
   var PR={open:0,waiting:1,scheduled:2,parked:3,done:4};
   var filt={domain:"all",lane:"all",state:"all"};
-  var KEY=null, ITEMS=[];
+  var KEY=null, SESS=null, WHO=null, ITEMS=[];
   try{ KEY=localStorage.getItem("lifeos-deck-key"); }catch(e){}
+  try{ SESS=JSON.parse(localStorage.getItem("lifeos-deck-session")||"null"); }catch(e){}
 
   function el(t,a,x){var n=document.createElement(t);for(var k in (a||{}))n.setAttribute(k,a[k]);if(x!==undefined)n.textContent=x;return n;}
   function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
   function md(s){var o="",rx=/\[([^\]]+)\]\((https?:[^)]+)\)/g,l=0,m;while((m=rx.exec(s))){o+=esc(s.slice(l,m.index))+'<a href="'+esc(m[2])+'" target="_blank" rel="noopener">'+esc(m[1])+"</a>";l=m.index+m[0].length;}return o+esc(s.slice(l));}
-  function api(body){ body.k=KEY; return fetch(API,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}).then(function(r){return r.json();}); }
   function cadence(u,n){ if(u==="day")return n===1?"daily":"every "+n+" days"; if(u==="week")return n===1?"weekly":n===2?"every 2 weeks":"every "+n+" weeks"; return n===1?"monthly":n===3?"quarterly":"every "+n+" months"; }
 
-  function showGate(bad){ document.getElementById("app").hidden=true; document.getElementById("gate").hidden=false; document.getElementById("gateerr").hidden=!bad; }
+  // ---- email-link session (implicit flow: the link returns here with the session in the URL hash) ----
+  function saveSess(s){ SESS=s; try{ if(s)localStorage.setItem("lifeos-deck-session",JSON.stringify(s)); else localStorage.removeItem("lifeos-deck-session"); }catch(e){} }
+  function sessionFromHash(){
+    var h=location.hash; if(!h||h.length<2)return null;
+    var p=new URLSearchParams(h.slice(1));
+    if(p.get("error_description")||p.get("error"))return {error:(p.get("error_description")||p.get("error")).replace(/\+/g," ")};
+    var at=p.get("access_token"); if(!at)return null;
+    var exp=parseInt(p.get("expires_at")||"0",10)||(Math.floor(Date.now()/1000)+(parseInt(p.get("expires_in")||"3600",10)||3600));
+    return {access_token:at,refresh_token:p.get("refresh_token")||"",expires_at:exp};
+  }
+  function refreshSess(){
+    if(!SESS||!SESS.refresh_token)return Promise.resolve(null);
+    return fetch(SB_URL+"/auth/v1/token?grant_type=refresh_token",{method:"POST",headers:{apikey:SB_ANON,"content-type":"application/json"},body:JSON.stringify({refresh_token:SESS.refresh_token})})
+      .then(function(r){ return r.json().then(function(d){ return {status:r.status,d:d}; }); })
+      .then(function(x){
+        if(x.d&&x.d.access_token){ saveSess({access_token:x.d.access_token,refresh_token:x.d.refresh_token||SESS.refresh_token,expires_at:x.d.expires_at||(Math.floor(Date.now()/1000)+(x.d.expires_in||3600))}); return SESS; }
+        if(x.status>=400&&x.status<500){ saveSess(null); return null; }   // refresh token revoked or expired — sign in again
+        return SESS;                                                        // server hiccup — keep the session, try again next time
+      }).catch(function(){ return SESS; });
+  }
+  function token(){
+    if(!SESS)return Promise.resolve(null);
+    if(SESS.expires_at-Math.floor(Date.now()/1000)>90)return Promise.resolve(SESS.access_token);
+    return refreshSess().then(function(s){ return s?s.access_token:null; });
+  }
+  function sendLink(email){
+    var back=location.origin+location.pathname;
+    return fetch(SB_URL+"/auth/v1/otp?redirect_to="+encodeURIComponent(back),{method:"POST",headers:{apikey:SB_ANON,"content-type":"application/json"},body:JSON.stringify({email:email,create_user:false,gotrue_meta_security:{}})})
+      .then(function(r){ return r.text().then(function(t){ var d={}; try{d=JSON.parse(t||"{}");}catch(e){} return {status:r.status,d:d}; }); });
+  }
+  function signOut(){
+    var s=SESS; saveSess(null); try{localStorage.removeItem("lifeos-deck-key");}catch(e){} KEY=null; WHO=null;
+    if(s&&s.access_token){ fetch(SB_URL+"/auth/v1/logout",{method:"POST",headers:{apikey:SB_ANON,authorization:"Bearer "+s.access_token}}).catch(function(){}); }
+    showGate(false);
+  }
+
+  function api(body){
+    if(KEY)body.k=KEY;
+    return token().then(function(t){
+      var h={"content-type":"application/json"}; if(t)h.authorization="Bearer "+t;
+      return fetch(API,{method:"POST",headers:h,body:JSON.stringify(body)});
+    }).then(function(r){ return r.json(); });
+  }
+
+  function showGate(msg){
+    document.getElementById("app").hidden=true; document.getElementById("gate").hidden=false;
+    var e=document.getElementById("gateerr"); e.hidden=!msg; e.textContent=msg||"";
+    document.getElementById("sent").hidden=true;
+    try{ var last=localStorage.getItem("lifeos-deck-email"); if(last&&!document.getElementById("emailin").value)document.getElementById("emailin").value=last; }catch(x){}
+    if(!SESS&&!KEY&&msg&&/key/i.test(msg))document.getElementById("keyalt").open=true;
+  }
   function load(){
     api({action:"state"}).then(function(res){
-      if(!res||!res.ok){ try{localStorage.removeItem("lifeos-deck-key");}catch(e){} KEY=null; showGate(true); return; }
-      ITEMS=res.items||[];
+      if(!res||!res.ok){
+        var why=res&&res.reason?res.reason:"";
+        if(!KEY&&!SESS){ showGate("Your sign-in expired — request a new email link."); return; }
+        if(KEY&&!SESS){ try{localStorage.removeItem("lifeos-deck-key");}catch(e){} KEY=null; showGate("That key was not accepted — check it and try again."); return; }
+        saveSess(null); try{localStorage.removeItem("lifeos-deck-key");}catch(e){} KEY=null;
+        showGate(why?("Sign-in not accepted: "+why+". Request a new email link."):"Sign in again to continue."); return;
+      }
+      ITEMS=res.items||[]; WHO=res.who||null;
       document.getElementById("gate").hidden=true; document.getElementById("app").hidden=false;
-      document.getElementById("stamp").textContent="Live ledger · "+ITEMS.length+" items · refreshed "+new Date().toLocaleTimeString();
+      var as=WHO&&WHO.via==="email"&&WHO.email?"signed in as "+WHO.email:"access key";
+      document.getElementById("stamp").textContent="Live ledger · "+ITEMS.length+" items · refreshed "+new Date().toLocaleTimeString()+" · "+as;
       render();
     }).catch(function(){ document.getElementById("stamp").textContent="Network problem — pull to refresh or try again."; });
   }
@@ -283,17 +357,49 @@ button.clr:hover{border-color:var(--now);color:var(--now)}
     api({action:"add_item",title:t,lane:document.getElementById("a_lane").value,domain:document.getElementById("a_domain").value,due_text:document.getElementById("a_due").value.trim()})
       .then(function(){document.getElementById("a_title").value="";document.getElementById("a_due").value="";load();});
   });
+  // email link
+  document.getElementById("emailgo").addEventListener("click",function(){
+    var inp=document.getElementById("emailin"), email=inp.value.trim().toLowerCase(), btn=this;
+    var err=document.getElementById("gateerr"), ok=document.getElementById("sent");
+    err.hidden=true; ok.hidden=true;
+    if(!email||email.indexOf("@")<1){ inp.focus(); return; }
+    btn.disabled=true; btn.textContent="Sending…";
+    sendLink(email).then(function(x){
+      btn.disabled=false; btn.textContent="Email me a sign-in link";
+      if(x.status>=200&&x.status<300){
+        try{localStorage.setItem("lifeos-deck-email",email);}catch(e){}
+        ok.textContent="Link sent to "+email+". Open that email on this device and tap the sign-in link — it brings you back here, signed in."; ok.hidden=false; return;
+      }
+      var m=String((x.d&&(x.d.msg||x.d.error_description||x.d.message||x.d.error))||"");
+      if(/signups? not allowed|otp_disabled/i.test(m))m="That email is not a bbetter sign-in. Use the address you sign in to app.bbetter.io with.";
+      else if(x.status===429||/rate limit|after \d+ seconds/i.test(m))m="Too many links requested — "+(m||"wait a few minutes and try again.");
+      else if(!m)m="The link could not be sent (status "+x.status+"). Try again in a minute.";
+      err.textContent=m; err.hidden=false;
+    }).catch(function(){ btn.disabled=false; btn.textContent="Email me a sign-in link"; err.textContent="Network problem — the link was not sent. Try again."; err.hidden=false; });
+  });
+  document.getElementById("emailin").addEventListener("keydown",function(e){ if(e.key==="Enter")document.getElementById("emailgo").click(); });
+
+  // access key (kept as the fallback)
   document.getElementById("keygo").addEventListener("click",function(){
     var v=document.getElementById("keyin").value.trim(); if(!v)return;
     KEY=v; try{localStorage.setItem("lifeos-deck-key",v);}catch(e){}
     load();
   });
   document.getElementById("keyin").addEventListener("keydown",function(e){ if(e.key==="Enter")document.getElementById("keygo").click(); });
-  document.getElementById("signout").addEventListener("click",function(){ try{localStorage.removeItem("lifeos-deck-key");}catch(e){} KEY=null; showGate(false); });
+  document.getElementById("signout").addEventListener("click",signOut);
 
-  if(KEY){ load(); } else { showGate(false); }
-  setInterval(function(){ if(KEY&&!document.hidden) load(); }, 60000);
-  document.addEventListener("visibilitychange",function(){ if(KEY&&!document.hidden) load(); });
+  // boot: a session arriving in the URL hash (from the email link) wins; otherwise a remembered session or key; otherwise the gate
+  function takeHash(){
+    var fromHash=sessionFromHash(); if(!fromHash)return false;
+    try{ history.replaceState(null,"",location.pathname+location.search); }catch(e){}
+    if(fromHash.error){ showGate("The sign-in link did not work: "+fromHash.error+". Request a new one."); }
+    else { saveSess(fromHash); load(); }
+    return true;
+  }
+  if(!takeHash()){ if(SESS||KEY){ load(); } else { showGate(false); } }
+  window.addEventListener("hashchange",takeHash);
+  setInterval(function(){ if((SESS||KEY)&&!document.hidden) load(); }, 60000);
+  document.addEventListener("visibilitychange",function(){ if((SESS||KEY)&&!document.hidden) load(); });
 })();
 </script>
 </body>
